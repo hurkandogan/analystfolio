@@ -1,0 +1,28 @@
+# --- Python Genel ---
+__pycache__/
+*.py[cod]
+*$py.class
+
+# --- Sanal Ortam (Venv) ---
+# Bunu git'e atarsan 500MB gereksiz dosya gider
+venv/
+env/
+.env
+
+# --- VS Code Ayarları ---
+.vscode/
+
+# --- Mac OS Gereksiz Dosyaları ---
+.DS_Store
+
+# --- Proje Özel ---
+# config.py dosyasını gizliyoruz çünkü içinde özel ayarlar olabilir.
+# Onun yerine config_example.py diye boş bir dosya atabilirsin.
+config.py
+
+# Veritabanı dosyaları (Eğer SQLite kullanırsak diye şimdiden ekleyelim)
+*.sqlite3
+*.db
+
+# Log dosyaları
+*.log
