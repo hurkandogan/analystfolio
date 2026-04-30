@@ -1,0 +1,40 @@
+# --- General ---
+.DS_Store
+.env
+.env.local
+*.log
+api/serviceAccountKey.json
+
+# --- Backend (Python/Poetry) ---
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+ENV/
+build/
+dist/
+.pytest_cache/
+.mypy_cache/
+# alembic/versions/*.pyc 
+
+# --- Frontend (Node.js/Next.js) ---
+node_modules/
+.next/
+out/
+build/
+.vercel
+*.tsbuildinfo
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# --- Databases / Local Tools ---
+*.db
+*.sqlite3
+.idea/
+.vscode/
+
+# --- Bot Strategies ---
+api/app/strategies/config/*.json

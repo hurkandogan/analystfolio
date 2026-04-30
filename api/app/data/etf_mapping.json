@@ -1,0 +1,22 @@
+{
+    "SXR8": {
+        "sector": "Financial",
+        "industry": "Exchange Traded Fund"
+    },
+    "4GLD": {
+        "sector": "Commodities",
+        "industry": "Precious Metals"
+    },
+    "XPPT": {
+        "sector": "Commodities",
+        "industry": "Precious Metals"
+    },
+    "4COP": {
+        "sector": "Commodities",
+        "industry": "Industrial Metals"
+    },
+    "4SLV": {
+        "sector": "Commodities",
+        "industry": "Precious Metals"
+    }
+}
