@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from app.infrastructure.database import get_db
 from app.core.scheduler import scheduler
+from app.config import settings
 from app.core.logger import log_manager
 from app.core.telegram_listener import start_telegram_listener
 from app.routers import bots, dashboard, market, calendar, notifications, watchlist
@@ -57,7 +58,7 @@ app = FastAPI(title="AnalystFolio API", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[o.strip() for o in settings.ALLOWED_ORIGINS.split(",")],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

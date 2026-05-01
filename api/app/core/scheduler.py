@@ -55,6 +55,18 @@ class SchedulerService:
             else:
                 print("✅ Database Bot Sync: No orphans found.")
 
+    def _schedule_job(self, bot_name: str, cron_expression: str):
+        """Adds or replaces a bot job in the APScheduler instance."""
+        trigger = CronTrigger.from_crontab(cron_expression)
+        self.scheduler.add_job(
+            self._run_job_wrapper,
+            trigger=trigger,
+            id=bot_name,
+            name=bot_name,
+            replace_existing=True,
+            args=[bot_name]
+        )
+
     async def register_bot(self, bot: BaseStrategy, cron_expression: str):
         self.registered_bots[bot.name] = bot
         
@@ -79,15 +91,7 @@ class SchedulerService:
                 print(f"⚠️ Bot {bot.name} is INACTIVE in DB. Skipping schedule.")
                 return
 
-        trigger = CronTrigger.from_crontab(cron_expression)
-        self.scheduler.add_job(
-            self._run_job_wrapper,
-            trigger=trigger,
-            id=bot.name,
-            name=bot.name,
-            replace_existing=True,
-            args=[bot.name]
-        )
+        self._schedule_job(bot.name, cron_expression)
         print(f"⏰ Scheduled: {bot.name} -> {cron_expression}")
 
     async def _run_job_wrapper(self, bot_name: str):
@@ -151,17 +155,8 @@ class SchedulerService:
 
         if active:
             if not self.scheduler.get_job(bot_name):
-                bot = self.registered_bots.get(bot_name)
-                if bot:
-                    trigger = CronTrigger.from_crontab(cron)
-                    self.scheduler.add_job(
-                        self._run_job_wrapper,
-                        trigger=trigger,
-                        id=bot_name,
-                        name=bot_name,
-                        replace_existing=True,
-                        args=[bot_name]
-                    )
+                if self.registered_bots.get(bot_name):
+                    self._schedule_job(bot_name, cron)
             else:
                 self.scheduler.resume_job(bot_name)
         else:

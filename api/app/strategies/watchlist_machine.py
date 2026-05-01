@@ -6,15 +6,45 @@ from sqlalchemy import select, delete
 
 from app.strategies.base import BaseStrategy
 from app.infrastructure.database import AsyncSessionLocal
-from app.infrastructure.models.trading import PremiumWatchlist, TradeSignal
+from app.infrastructure.models.trading import PremiumWatchlist
 from app.infrastructure.models.common import Instrument, MarketDataCache, FundamentalCache
 from app.infrastructure.ibkr_client import ibkr_client
 from app.data.fetcher import market_fetcher
 from app.logic.watchlist_evaluator import evaluate_watchlist_state
-from ib_async import Stock
+from app.services.signal_manager import SignalManager
+from app.data.option_scanner import find_best_puts
 from sqlalchemy import desc
 
 logger = logging.getLogger(__name__)
+
+# Prevents duplicate option chain scans for the same symbol on the same calendar day.
+# Structure: { date_iso: set[symbol] }
+_daily_scanned: dict = {}
+
+
+def _format_put_suggestions(
+    symbol: str, current_price: float, rsi: float, iv_rank: float, candidates: list
+) -> str:
+    """Formats option scan results into a Telegram-ready message."""
+    parts = [
+        "━━━━━━━━━━━━━━━━━━━━",
+        f"🎯 *PUT SELL — {symbol}*",
+        f"💰 *Fiyat:* `${current_price:.2f}` | *RSI:* `{rsi:.0f}` | *IV Rank:* `{iv_rank:.0f}%`",
+        "━━━━━━━━━━━━━━━━━━━━",
+    ]
+    nums = ["1️⃣", "2️⃣", "3️⃣"]
+    for i, c in enumerate(candidates):
+        num = nums[i] if i < len(nums) else f"{i + 1}."
+        iv_str = f" | IV: `{c['iv_pct']:.0f}%`" if c.get('iv_pct') else ""
+        parts.append(
+            f"{num} `{symbol} {c['strike']:.0f}P {c['expiry_readable']}` ({c['dte']} DTE)\n"
+            f"   💵 Mid: `${c['mid']:.2f}` | Δ: `{c['delta']:.2f}`{iv_str}\n"
+            f"   📈 Yıllık: `%{c['annual_yield_pct']:.1f}` | "
+            f"BE: `${c['break_even']:.2f}` (`-{c['protection_pct']:.1f}%`)"
+        )
+    parts.append("━━━━━━━━━━━━━━━━━━━━")
+    return "\n".join(parts)
+
 
 class WatchlistStateMachine(BaseStrategy):
     """
@@ -25,9 +55,18 @@ class WatchlistStateMachine(BaseStrategy):
     """
     def __init__(self):
         super().__init__("WatchlistStateMachine")
+        self.signal_manager = SignalManager(self.name)
 
     async def execute(self):
         cfg = self.config
+
+        # Initialise daily scan tracker — clear stale entries on each run
+        today_iso = datetime.now(timezone.utc).date().isoformat()
+        if today_iso not in _daily_scanned:
+            _daily_scanned.clear()
+            _daily_scanned[today_iso] = set()
+        max_daily_scans = int(cfg.get("max_daily_scans", 3))
+
         iv_ultra = cfg.get("iv_ultra", 80.0)
         iv_high = cfg.get("iv_high", 70.0)
         iv_mid = cfg.get("iv_mid", 40.0)
@@ -110,23 +149,15 @@ class WatchlistStateMachine(BaseStrategy):
                 state_emoji = eval_res["state_emoji"]
 
                 if new_state == "Action":
-                    new_signal = TradeSignal(
-                        instrument_id=instr.id,
-                        bot_name=self.name,
-                        signal_price=current_price,
-                        reason=f"Fundamental Score > {min_ps_score}, Solid Premium (IV>{iv_high:.0f}), and Tech Oversold (RSI<{rsi_limit:.0f}).",
-                        score=100.0,
-                        status="NEW",
-                        signal_data={
+                    db.add(self.signal_manager.build_signal(
+                        instr.id, current_price, 100.0,
+                        [f"Fundamental Score > {min_ps_score}, Solid Premium (IV>{iv_high:.0f}), Tech Oversold (RSI<{rsi_limit:.0f})."],
+                        "NEW",
+                        {
                             "strategy": "PUT SELL OPPORTUNITY",
-                            "metrics": {
-                                "rsi": latest_rsi,
-                                "iv": current_iv,
-                                "fundamental_score": score
-                            }
+                            "metrics": {"rsi": latest_rsi, "iv": current_iv, "fundamental_score": score}
                         }
-                    )
-                    db.add(new_signal)
+                    ))
                     item.last_signal_at = datetime.now(timezone.utc)
                     item.current_state = "Action"
                     
@@ -143,7 +174,21 @@ class WatchlistStateMachine(BaseStrategy):
                         f"💡 *Action:* High Premium available on heavily oversold quality asset."
                     )
                     await self.notify(msg)
-                
+
+                    # Option chain scan: once per symbol per day, max max_daily_scans total
+                    already_scanned = _daily_scanned.get(today_iso, set())
+                    if (
+                        instr.symbol not in already_scanned
+                        and len(already_scanned) < max_daily_scans
+                    ):
+                        await asyncio.sleep(1)  # brief pause before chain request
+                        put_suggestions = await find_best_puts(instr, current_price, cfg)
+                        if put_suggestions:
+                            _daily_scanned[today_iso].add(instr.symbol)
+                            await self.notify(_format_put_suggestions(
+                                instr.symbol, current_price, latest_rsi, current_iv, put_suggestions
+                            ))
+
                 # In real TWS pre-market, snapshot usually holds the live delayed tick.
                 elif bars:
                     last_close = bars[-1].close

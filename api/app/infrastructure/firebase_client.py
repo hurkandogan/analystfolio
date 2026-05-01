@@ -6,6 +6,7 @@ import os
 import math
 from datetime import datetime
 from enum import Enum
+from app.config import settings
 
 class AssetType(str, Enum):
     ASSET = "ASSET"
@@ -16,7 +17,7 @@ class AssetType(str, Enum):
 class FirebaseClient:
     def __init__(self):
         self.db = None
-        self.user_id = "xZy4l4CANfYxpLRfkCxhvfVOURh2" #TODO move to config
+        self.user_id = settings.FIREBASE_USER_ID
         self._initialized = False
         self.etf_mapping = self._load_etf_mapping()
 

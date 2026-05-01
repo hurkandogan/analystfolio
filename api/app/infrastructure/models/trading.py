@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, JSON, ForeignKey, BigInteger, func, Boolean
+from sqlalchemy import Column, Integer, String, Float, DateTime, JSON, ForeignKey, BigInteger, func, Boolean, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declared_attr
 from app.infrastructure.database import Base
@@ -9,7 +9,11 @@ from app.infrastructure.database import Base
 
 class TradeSignal(Base):
     __tablename__ = 'trade_signals'
-    __table_args__ = {'schema': 'common'}
+    __table_args__ = (
+        Index('ix_trade_signals_instr_bot_status', 'instrument_id', 'bot_name', 'status'),
+        Index('ix_trade_signals_instr_bot_created', 'instrument_id', 'bot_name', 'created_at'),
+        {'schema': 'common'}
+    )
 
     id = Column(Integer, primary_key=True)
     instrument_id = Column(Integer, ForeignKey('common.instruments.id'))
@@ -35,7 +39,10 @@ class TradeSignal(Base):
 
 class PremiumWatchlist(Base):
     __tablename__ = 'premium_watchlist'
-    __table_args__ = {'schema': 'common'}
+    __table_args__ = (
+        Index('ix_premium_watchlist_active', 'is_active'),
+        {'schema': 'common'}
+    )
 
     id = Column(Integer, primary_key=True)
     ticker = Column(String(20), nullable=False)

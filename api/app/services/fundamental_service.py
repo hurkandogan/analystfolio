@@ -63,11 +63,12 @@ class FundamentalService:
         inst_count = info.get('institutionsCount')
         ocf = info.get('operatingCashflow')
 
-        # ROIC Estimate 
+        # ROIC Estimate: ROE / (1 + D/E ratio)
+        # yfinance returns debtToEquity as a percentage (e.g., 150 = 1.5x ratio), always normalize by /100
         roic_est = None
-        if roe is not None and dte is not None:
-             dte_val = dte / 100.0 if dte > 5.0 else dte
-             roic_est = roe / (1 + dte_val)
+        if roe is not None and dte is not None and dte >= 0:
+            dte_ratio = dte / 100.0
+            roic_est = roe / (1 + dte_ratio)
 
         base_data = {
             "pe_ratio": pe_ratio,

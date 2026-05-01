@@ -5,7 +5,6 @@ from typing import List, Tuple
 
 from app.infrastructure.database import AsyncSessionLocal
 from app.infrastructure.models.common import Instrument, FundamentalCache, MarketDataCache
-from app.infrastructure.models.trading import TradeSignal
 from app.strategies.base import BaseStrategy
 from app.logic.fundamentals_scorer import evaluate_fundamentals
 from app.services.signal_manager import SignalManager
@@ -117,16 +116,10 @@ class FundamentalAnalystBot(BaseStrategy):
                 elif eval_res.score >= min_score and old_status in ['OPEN', 'NEW']:
                     await self.notify(msg)
             else:
-                new_sig = TradeSignal(
-                    instrument_id=instr.id,
-                    bot_name=self.name,
-                    signal_price=eval_res.current_price,
-                    reason=", ".join(eval_res.reasons),
-                    score=eval_res.score,
-                    status=final_status,
-                    signal_data={"metrics": eval_res.model_dump()}
-                )
-                db.add(new_sig)
+                db.add(self.signal_manager.build_signal(
+                    instr.id, eval_res.current_price, eval_res.score,
+                    eval_res.reasons, final_status, {"metrics": eval_res.model_dump()}
+                ))
                 if final_status in ['NEW', 'OPEN']:
                     await self.notify(msg)
 
@@ -138,16 +131,19 @@ class FundamentalAnalystBot(BaseStrategy):
         mom = eval_res.momentum_data
         def f_n(v): return f"{v:.1f}" if v is not None else "N/A"
         def f_p(v): return f"{v:+.1%}" if v is not None else "N/A"
-        
-        pe_str = f"{fdata.pe_ratio:.1f}" if fdata.pe_ratio else "N/A"
-        peg_str = f"{fdata.peg_ratio:.1f}" if fdata.peg_ratio else "N/A"
+
+        pe_str     = f"{fdata.pe_ratio:.1f}" if fdata.pe_ratio else "N/A"
+        peg_str    = f"{fdata.peg_ratio:.1f}" if fdata.peg_ratio else "N/A"
         target_str = f"${fdata.target_price:.2f}" if fdata.target_price else "N/A"
         change_30d = f_p(mom.change_30d)
-        
+
+        upside_str  = f"{eval_res.analyst_upside:+.1%}" if eval_res.analyst_upside is not None else "N/A"
+        rev_str     = f"{eval_res.revenue_growth:+.1%}" if eval_res.revenue_growth else "N/A"
+
         prefix = "🎯 *FUNDAMENTAL OPPORTUNITY"
         if eval_res.is_unusual_activity:
             prefix = "🚨 *UNUSUAL ACTIVITY DETECTED"
-        
+
         return (
             f"━━━━━━━━━━━━━━━━━━━━\n"
             f"{prefix}*\n"
@@ -157,6 +153,7 @@ class FundamentalAnalystBot(BaseStrategy):
             f"📅 *30D Change:* `{change_30d}`\n"
             f"🔢 *Signal Day:* `{display_count}`\n"
             f"━━━━━━━━━━━━━━━━━━━━\n"
+            f"📈 *Rev Growth:* `{rev_str}` | *Analyst Upside:* `{upside_str}`\n"
             f"💵 *P/E:* `{pe_str}` | *PEG:* `{peg_str}`\n"
             f"🎯 *Analyst Target:* `{target_str}`\n"
             f"🌊 *Momentum:* RSI: `{f_n(mom.rsi)}` | rVol: `{f_n(mom.rvol)}x`\n"

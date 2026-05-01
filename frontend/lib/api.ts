@@ -1,7 +1,8 @@
 import axios from 'axios';
 
-const API_URL = 'http://127.0.0.1:8000';
-const WS_URL = 'ws://127.0.0.1:8000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://127.0.0.1:8000';
+// Derives ws:// or wss:// from the HTTP URL automatically
+const WS_URL = API_URL.replace(/^http/, 'ws');
 
 const api = axios.create({
   baseURL: API_URL,
@@ -187,7 +188,71 @@ export const WatchlistAPI = {
   delete: async (id: number) => {
     const response = await api.delete(`/watchlist/${id}`);
     return response.data;
-  }
+  },
 };
 
 export default api;
+
+// ---------------------------------------------------------------------------
+// Calendar
+// ---------------------------------------------------------------------------
+
+export interface CalendarEntry {
+  id: number;
+  exchange: string;
+  date: string;
+  is_open: boolean;
+  note: string;
+}
+
+export interface CalendarCreatePayload {
+  exchange: string;
+  date: string;
+  is_open: boolean;
+  note: string;
+}
+
+export const CalendarAPI = {
+  getAll: async () => {
+    const response = await api.get<CalendarEntry[]>('/calendar/');
+    return response.data;
+  },
+
+  create: async (payload: CalendarCreatePayload) => {
+    const response = await api.post<CalendarEntry>('/calendar/', payload);
+    return response.data;
+  },
+
+  delete: async (id: number) => {
+    const response = await api.delete(`/calendar/${id}`);
+    return response.data;
+  },
+};
+
+// ---------------------------------------------------------------------------
+// Notifications
+// ---------------------------------------------------------------------------
+
+export interface NotificationDTO {
+  id: number;
+  channel: string;
+  scope: string;
+  content: string;
+  status: string;
+  created_at: string;
+  meta: Record<string, unknown> | null;
+}
+
+export const NotificationsAPI = {
+  getAll: async (limit: number = 50) => {
+    const response = await api.get<NotificationDTO[]>(
+      `/notifications/?limit=${limit}`,
+    );
+    return response.data;
+  },
+
+  resend: async (id: number) => {
+    const response = await api.post(`/notifications/${id}/resend`);
+    return response.data;
+  },
+};

@@ -23,8 +23,9 @@ class TechnicalIndicators:
         delta = daily_closes.diff()
         up = delta.clip(lower=0)
         down = -1 * delta.clip(upper=0)
-        ma_up = up.ewm(com=13, adjust=False, min_periods=14).mean()
-        ma_down = down.ewm(com=13, adjust=False, min_periods=14).mean()
+        # com = (span - 1) / 2 = (14 - 1) / 2 = 6.5 for RSI-14
+        ma_up = up.ewm(com=6.5, adjust=False, min_periods=14).mean()
+        ma_down = down.ewm(com=6.5, adjust=False, min_periods=14).mean()
         rs = ma_up / ma_down
         daily_rsi = 100 - (100 / (1 + rs))
         

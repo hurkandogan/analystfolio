@@ -5,7 +5,6 @@ from typing import List, Dict
 
 from app.infrastructure.database import AsyncSessionLocal
 from app.infrastructure.models.common import Instrument, FundamentalCache, MarketDataCache
-from app.infrastructure.models.trading import TradeSignal
 from app.strategies.base import BaseStrategy
 from app.logic.small_cap_scorer import evaluate_small_cap
 from app.services.signal_manager import SignalManager
@@ -135,16 +134,10 @@ class SmallCapScoutBot(BaseStrategy):
                 elif eval_res["score"] >= watch_threshold and old_status in ['WEAK', 'OPEN']:
                     await self.notify(msg)
             else:
-                new_sig = TradeSignal(
-                    instrument_id=instr.id,
-                    bot_name=self.name,
-                    signal_price=eval_res["current_price"],
-                    reason=", ".join(eval_res["reasons"]),
-                    score=eval_res["score"],
-                    status=final_status,
-                    signal_data={"metrics": eval_res}
-                )
-                db.add(new_sig)
+                db.add(self.signal_manager.build_signal(
+                    instr.id, eval_res["current_price"], eval_res["score"],
+                    eval_res["reasons"], final_status, {"metrics": eval_res}
+                ))
                 if eval_res["score"] >= watch_threshold:
                     await self.notify(msg)
         

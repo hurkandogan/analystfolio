@@ -22,3 +22,5 @@ class ScoringResult(BaseModel):
     sr_levels: Dict[str, Any]
     is_unusual_activity: bool
     current_price: float
+    analyst_upside: Optional[float] = None
+    revenue_growth: Optional[float] = None

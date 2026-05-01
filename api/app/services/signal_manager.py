@@ -73,3 +73,16 @@ class SignalManager:
             
         chain_count = (await db.execute(count_query)).scalar() or 0
         return chain_count if daily_signal_exists else (chain_count + 1)
+
+    def build_signal(self, instrument_id: int, signal_price: float, score: float,
+                     reasons: list, status: str, signal_data: dict) -> TradeSignal:
+        """Creates a TradeSignal instance. Caller is responsible for db.add()."""
+        return TradeSignal(
+            instrument_id=instrument_id,
+            bot_name=self.bot_name,
+            signal_price=signal_price,
+            reason=", ".join(reasons),
+            score=score,
+            status=status,
+            signal_data=signal_data
+        )

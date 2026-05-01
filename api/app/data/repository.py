@@ -19,11 +19,26 @@ class DataRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def get_instruments_by_role(self, roles: List[str] = None) -> Sequence[Instrument]:
-        """Fetches instruments with specific roles."""
+    async def get_instruments_by_role(
+        self,
+        roles: List[str] = None,
+        limit: Optional[int] = None,
+        offset: Optional[int] = None,
+    ) -> Sequence[Instrument]:
+        """Fetches instruments with specific roles.
+
+        Args:
+            roles: Data roles to filter by. Defaults to ['TRADE', 'WATCH'].
+            limit: Maximum number of rows to return. None means no limit.
+            offset: Number of rows to skip. Used for pagination.
+        """
         if roles is None:
             roles = ['TRADE', 'WATCH']
         stmt = select(Instrument).where(Instrument.data_role.in_(roles))
+        if offset is not None:
+            stmt = stmt.offset(offset)
+        if limit is not None:
+            stmt = stmt.limit(limit)
         result = await self.session.execute(stmt)
         return result.scalars().all()
 

@@ -124,7 +124,8 @@ class TechnicalAnalysis:
                 # 2. RSI (14)
                 delta = df_daily['close'].diff()
                 up = delta.clip(lower=0); down = -1 * delta.clip(upper=0)
-                ma_up = up.ewm(com=13, adjust=False).mean(); ma_down = down.ewm(com=13, adjust=False).mean()
+                # com = (span - 1) / 2 = (14 - 1) / 2 = 6.5 for RSI-14
+                ma_up = up.ewm(com=6.5, adjust=False).mean(); ma_down = down.ewm(com=6.5, adjust=False).mean()
                 rs = ma_up / ma_down; rsi = 100 - (100 / (1 + rs))
                 current_rsi = rsi.iloc[-1]
                 res["rsi"] = round(current_rsi, 2)
@@ -160,3 +161,10 @@ class TechnicalAnalysis:
         return res
 
 analysis = TechnicalAnalysis()
+
+
+def get_momentum_value(momentum_data, key: str, default=None):
+    """Safely reads a field from momentum_data whether it's a dict or an object."""
+    if isinstance(momentum_data, dict):
+        return momentum_data.get(key, default)
+    return getattr(momentum_data, key, default)

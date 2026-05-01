@@ -6,7 +6,7 @@ from app.infrastructure.database import async_sessionmaker, engine
 from app.infrastructure.models.calendar import ExchangeCalendar
 from app.infrastructure.ibkr_client import ibkr_client
 from app.infrastructure.notifiers.manager import notification_manager
-from ib_async import Contract
+from app.data.contracts import ContractFactory
 
 logger = logging.getLogger(__name__)
 
@@ -64,11 +64,7 @@ class MarketOpeningBot(BaseStrategy):
         
         for key, info in self.indices.items():
             try:
-                contract = Contract()
-                contract.symbol = info["symbol"]
-                contract.secType = info["secType"]
-                contract.exchange = info["exchange"]
-                contract.currency = info["currency"]
+                contract = ContractFactory.from_config(info)
                 
                 # Qualify contract
                 qualified_contracts = await ibkr_client.ib.qualifyContractsAsync(contract)

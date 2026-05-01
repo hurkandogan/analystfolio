@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Date, JSON, ForeignKey, BigInteger, Text, PrimaryKeyConstraint, Boolean
+from sqlalchemy import Column, Integer, String, Float, DateTime, Date, JSON, ForeignKey, BigInteger, Text, PrimaryKeyConstraint, Boolean, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.infrastructure.database import Base
@@ -67,7 +67,10 @@ class MarketDataCache(Base):
 
 class FundamentalCache(Base):
     __tablename__ = 'fundamental_cache'
-    __table_args__ = {'schema': 'common'}
+    __table_args__ = (
+        Index('ix_fundamental_cache_instr_date', 'instrument_id', 'date'),
+        {'schema': 'common'}
+    )
 
     id = Column(BigInteger, primary_key=True, index=True)
     instrument_id = Column(Integer, ForeignKey('common.instruments.id'), nullable=False)

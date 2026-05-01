@@ -2,12 +2,13 @@ import asyncio
 import logging
 from datetime import datetime, timedelta, timezone
 from typing import List, Tuple, Optional, Any
-from ib_async import Stock, BarDataList
+from ib_async import BarDataList
 from sqlalchemy import select, func
 
 from app.infrastructure.ibkr_client import ibkr_client
 from app.infrastructure.models.common import MarketDataCache
 from app.data.repository import DataRepository
+from app.data.contracts import ContractFactory
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +44,7 @@ class MarketDataFetcher:
             return [], False
 
         all_bars = []
-        contract = Stock(symbol=instr.symbol, exchange='SMART', currency='USD')
+        contract = ContractFactory.stock(instr.symbol)
         
         for end_time, duration in fetch_queue:
             try:
@@ -136,7 +137,7 @@ class MarketDataFetcher:
         if not ibkr_client.is_connected():
             return None
 
-        contract = Stock(symbol=instr.symbol, exchange='SMART', currency='USD')
+        contract = ContractFactory.stock(instr.symbol)
         
         try:
             # Contract Qualify
@@ -186,7 +187,7 @@ class MarketDataFetcher:
             end_date_str = latest_ts.strftime('%Y%m%d %H:%M:%S')
             
             # 2. Request data for the same date from IBKR (Duration = 1 W is enough for last 5 bars for hourly)
-            contract = Stock(symbol=instr.symbol, exchange='SMART', currency='USD')
+            contract = ContractFactory.stock(instr.symbol)
             
             # Request 2 days of data for validation (guaranteed to cover 5 bars in hourly)
             ib_bars = await ibkr_client.ib.reqHistoricalDataAsync(
@@ -229,48 +230,48 @@ class MarketDataFetcher:
             logger.error(f"Integrity check error {instr.symbol}: {e}")
             return True # Don't trigger deep scan on error, stay safe
 
-    async def get_implied_volatility(self, instr, duration_days: int = 252) -> Optional[float]:
+    async def get_implied_volatility(self, instr) -> Optional[float]:
         """
-        Queries 'OPTION_IMPLIED_VOLATILITY' data via IBKR.
-        By default returns the latest IV info (float as percentage, e.g.: 0.25 => 25%).
-        :param duration_days: (Backup) period if historical IV is desired for IV Rank.
-        :return: Last IV (or None)
+        Fetches 1 year of daily IV data from IBKR and calculates IV Rank.
+        IV Rank = (current_IV - 52w_low) / (52w_high - 52w_low) * 100
+        Returns a value between 0-100, or None if data is unavailable.
         """
         if not ibkr_client.is_connected():
             return None
 
-        contract = Stock(symbol=instr.symbol, exchange='SMART', currency='USD')
+        contract = ContractFactory.stock(instr.symbol)
         
         try:
-            # We can just fetch the last 2 days of IV data and take the latest.
-            # If you want to calculate IV Rank, we can fetch duration_days and find min-max
-            # but min period is enough if the bot will look at "current" IV.
-            
-            # Note: For IV Rank (Annual), a 1-year IV history is usually needed.
-            # If iv_rank in DB is insufficient, 252 D can be fetched here and rank formula applied:
-            # IV Rank = 100 * (current_IV - min_IV) / (max_IV - min_IV)
-            
-            # For now, to avoid taxing IBKR with historical IV calculations,
-            # we are only fetching today's/yesterday's IV value. (Rank = how much expensive)
+            # Fetch 1 year of daily IV data to compute IV Rank
             bars = await ibkr_client.ib.reqHistoricalDataAsync(
                 contract,
                 endDateTime='',
-                durationStr='5 D', # Guarantee we get at least 1 recent trading day
+                durationStr='1 Y',
                 barSizeSetting='1 day',
                 whatToShow='OPTION_IMPLIED_VOLATILITY',
                 useRTH=True,
                 formatDate=1
             )
-            
+
             if not bars:
                 return None
-            
-            # The close price of an IV bar represents the Implied Volatility (e.g., 0.23 means 23%)
-            latest_iv = bars[-1].close
-            return latest_iv * 100.0 # Return as percentage (23.0)
+
+            closes = [b.close for b in bars if b.close and b.close > 0]
+            if not closes:
+                return None
+
+            current_iv = closes[-1]
+            min_iv = min(closes)
+            max_iv = max(closes)
+
+            if max_iv == min_iv:
+                return 50.0  # Flat IV over the year, return neutral rank
+
+            iv_rank = (current_iv - min_iv) / (max_iv - min_iv) * 100.0
+            return round(iv_rank, 2)
 
         except Exception as e:
-            logger.error(f"IV Fetch Error {instr.symbol}: {e}")
+            logger.error(f"IV Rank Fetch Error {instr.symbol}: {e}")
             return None
 
 market_fetcher = MarketDataFetcher()

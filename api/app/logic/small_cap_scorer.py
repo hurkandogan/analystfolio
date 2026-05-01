@@ -1,4 +1,4 @@
-from app.data.analysis import analysis
+from app.data.analysis import analysis, get_momentum_value
 
 def evaluate_small_cap(instr, fdata, bars, sector_avg_ps, cfg):
     """
@@ -9,8 +9,8 @@ def evaluate_small_cap(instr, fdata, bars, sector_avg_ps, cfg):
     
     # Momentum and Volume
     momentum_data = analysis.calculate_momentum_metrics(bars, min_periods=60)
-    avg_vol_3m = momentum_data.get("avg_vol_3m") if isinstance(momentum_data, dict) else getattr(momentum_data, "avg_vol_3m", 0)
-    rvol = momentum_data.get("rvol") if isinstance(momentum_data, dict) else getattr(momentum_data, "rvol", 0)
+    avg_vol_3m = get_momentum_value(momentum_data, "avg_vol_3m", 0)
+    rvol = get_momentum_value(momentum_data, "rvol", 0)
     
     current_price = 0.0
     if bars:
